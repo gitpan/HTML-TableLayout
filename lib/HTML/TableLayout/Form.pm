@@ -10,7 +10,7 @@
 # Author: Stephen Farrell
 # Created: August 1997
 # Locations: http://people.healthquiz.com/sfarrell/TableLayout/
-# CVS $Id: Form.pm,v 1.16 1998/04/16 16:12:03 sfarrell Exp $
+# CVS $Id: Form.pm,v 1.17 1998/05/14 19:42:26 sfarrell Exp $
 # ====================================================================
 
 ## ===================================================================
@@ -29,16 +29,8 @@
 package HTML::TableLayout::Form;
 use HTML::TableLayout::Symbols;
 @HTML::TableLayout::Form::ISA=qw(HTML::TableLayout::ComponentContainer);
+use Carp;
 use strict;
-
-sub new {
-  my ($class, %params) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{TL_PARAMS} = \%params;
-  $self->{TL_COMPONENTS} = [];
-  return $self;
-}
 
 sub setMethod { shift->{TL_PARAMS}->{method} = pop }
 sub getMethod { return shift->{TL_PARAMS}->{method} }
@@ -88,8 +80,13 @@ sub passCGI {
 ## exists to check if keys exist in the hash...
 ##
 sub useData {
-  my ($this, $data) = @_;
-  $this->{default_data} = $data;
+  my ($this, @data) = @_;
+  if (ref $data[0] eq "HASH") {
+    $this->{default_data} = $data[0];
+  }
+  else {
+    $this->{default_data} = { @data };
+  }
   return $this;
 }
 
@@ -105,7 +102,8 @@ sub useData {
 ##
 sub insert {
   my ($this, $c) = @_;
-  if ($c->_isa("HTML::TableLayout::FormComponent::Hidden")) {
+
+  if ($c->isa("HTML::TableLayout::FormComponent::Hidden")) {
     if ($this->{passlist}) {
       
       ##
@@ -188,16 +186,16 @@ sub _getDefaultData { return shift->{default_data} }
 ##
 ## FIXME: this is NOT a full implementation of clone for this class!!!
 ##
-sub clone {
-  my ($this) = @_;
-  my $class;
-  my $clone = HTML::TableLayout::Form->new();
-  my %passcgi_copy = %{ $this->{passcgi} };
-  my %params_copy = %{ $this->{TL_PARAMS} };
-  $clone->{passcgi} = \%passcgi_copy;
-  $clone->{TL_PARAMS} = \%params_copy;
-  return $clone;
-}
+# sub clone {
+#   my ($this) = @_;
+#   my $class;
+#   my $clone = HTML::TableLayout::Form->new();
+#   my %passcgi_copy = %{ $this->{passcgi} };
+#   my %params_copy = %{ $this->{TL_PARAMS} };
+#   $clone->{passcgi} = \%passcgi_copy;
+#   $clone->{TL_PARAMS} = \%params_copy;
+#   return $clone;
+# }
 
 
 ##
@@ -218,7 +216,7 @@ sub tl_setValue { shift->{TL_PARAMS}->{value} = pop }
 sub tl_setDefaultValue {
   my ($this) = @_;
   return if $this->{TL_PARAMS}->{value};
-  &$OOPSER("No form (BUG!) [$this]") unless $this->{TL_FORM};
+  die("No form (BUG!) [$this]") unless $this->{TL_FORM};
   my $data_hash = $this->{TL_FORM}->_getDefaultData();
   return unless exists $data_hash->{$this->{TL_PARAMS}->{name}};
   my $v;
@@ -240,14 +238,15 @@ package HTML::TableLayout::FormComponent::Hidden;
 use HTML::TableLayout::Symbols;
 @HTML::TableLayout::FormComponent::Hidden::ISA=
   qw(HTML::TableLayout::FormComponent);
-sub new {
-  my ($class, $name, $value, $visible) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{TL_PARAMS}->{name} = $name;
-  $self->{TL_PARAMS}->{value} = $value;
-  $self->{visible} = $visible;
-  return $self;
+
+sub tl_init {
+  my $this = shift;
+  my $name = shift;
+  my $value = shift;
+  $this->{visible} = shift;
+  $this->SUPER::tl_init(@_);
+  $this->{TL_PARAMS}->{name} = $name;
+  $this->{TL_PARAMS}->{value} = $value;
 }
 
 ##
@@ -276,13 +275,13 @@ package HTML::TableLayout::FormComponent::Faux;
 ## value; it does not do any other form-like things such as *passing
 ## it's value*.  Use a "visible" Hidden if you want to do this.
 ##
-sub new {
-  my ($class, $name, $value) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{TL_PARAMS}->{name} = $name;
-  $self->{TL_PARAMS}->{value} = $value;
-  return $self;
+sub tl_init {
+  my $this = shift;
+  my $name = shift;
+  my $value = shift;
+  $this->SUPER::tl_init(@_);
+  $this->{TL_PARAMS}->{name} = $name;
+  $this->{TL_PARAMS}->{value} = shift;
 }
 
 sub tl_print {
@@ -332,7 +331,7 @@ sub tl_print {
 sub tl_setDefaultValue {
   my ($this) = @_;
   return if exists $this->{TL_PARAMS}->{checked};
-  &$OOPSER("No form (BUG!) [$this]") unless $this->{TL_FORM};
+  die("No form (BUG!) [$this]") unless $this->{TL_FORM};
   my $data_hash = $this->{TL_FORM}->_getDefaultData();
   return unless exists $data_hash->{$this->{TL_PARAMS}->{name}};
   if (exists $data_hash->{$this->{TL_PARAMS}->{name}}) {
@@ -347,13 +346,11 @@ use HTML::TableLayout::Symbols;
 @HTML::TableLayout::FormComponent::Textarea::ISA=
   qw(HTML::TableLayout::FormComponent);
 
-sub new {
-  my ($class, $value, %params) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{TL_PARAMS} = \%params;
-  $self->{TL_PARAMS}->{value} = $value;
-  return $self;
+sub tl_init {
+  my $this = shift;
+  my $value = shift;
+  $this->SUPER::tl_init(@_);
+  $this->{TL_PARAMS}->{value} = $value;
 }
 
 sub tl_print {
@@ -386,13 +383,11 @@ use HTML::TableLayout::Symbols;
 
 
 ## 99/100 times, you'll just be passing in the value here
-sub new {
-  my ($class, $value, %params) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{TL_PARAMS} = \%params;
-  defined $value and $self->{TL_PARAMS}->{value} = $value;
-  return $self;
+sub tl_init {
+  my $this = shift;
+  my $value = shift;
+  $this->SUPER::tl_init(@_);
+  (defined $value) and $this->{TL_PARAMS}->{value} = $value;
 }
 
 ##
@@ -402,7 +397,7 @@ sub new {
 sub tl_setDefaultValue { }
 sub tl_print {
   my ($this) = @_;
-  &$OOPSER($this->{TL_PARAMS}->{value}) unless $this->{TL_WINDOW};
+  die($this->{TL_PARAMS}->{value}) unless $this->{TL_WINDOW};
   $this->{TL_WINDOW}
   ->i_print("><INPUT TYPE=SUBMIT".params(%{ $this->{TL_PARAMS} })."");
 }
@@ -410,18 +405,19 @@ sub tl_print {
 # ---------------------------------------------------------------------
 package HTML::TableLayout::FormComponentMulti;
 use HTML::TableLayout::Symbols;
+use Carp;
 @HTML::TableLayout::FormComponentMulti::ISA =
   qw(HTML::TableLayout::ComponentContainer HTML::TableLayout::FormComponent);
+##
+## FIXME: why is this a ComponentContainer??
+##
 
-
-sub new {
-  my ($class, $ops, %params) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{TL_PARAMS} = \%params;
-  $self->{TL_OPS} = $ops;
-  return $self;
+sub tl_init {
+  my $this = shift;
+  $this->{TL_OPS} = shift;
+  $this->SUPER::tl_init(@_);
 }
+
 
 sub tl_setup {
   my ($this) = @_;
@@ -502,7 +498,7 @@ sub tl_print {
   $w->_indentIncrement();
   my $o;
   foreach $o (@{ $this->{TL_OPS} }) {
-    if (! (ref $o eq "ARRAY")) { &$OOPSER("malformed options") }
+    if (! (ref $o eq "ARRAY")) { die("malformed options") }
     $w->i_print("><OPTION VALUE=\"$o->[0]\"");
     if ($o->[0] eq $this->{TL_DEFAULT_VALUE}) {
       $w->f_print(" SELECTED");

@@ -10,7 +10,7 @@
 # Author: Stephen Farrell
 # Created: August, 1997
 # Locations: http://people.healthquiz.com/sfarrell/TableLayout/
-# CVS $Id: TableLayout.pm,v 1.13 1998/04/16 16:14:58 sfarrell Exp $
+# CVS $Id: TableLayout.pm,v 1.14 1998/05/14 19:42:27 sfarrell Exp $
 # ====================================================================
 ##
 ## Thanks for help and comments from: Jeff Stampes, Andreas Koenig, ...
@@ -144,10 +144,10 @@ init() method):
 
 	sub new {
 		my ($class, %params) = @_;
-		my $self = {};
-		bless $self, $class;
-		$self->tl_inheritParamsFrom(checkbox());
-		return $self;
+		my  = {};
+		bless , $class;
+		->tl_inheritParamsFrom(checkbox());
+		return ;
 	}
 
 And the mechanism that sets the parameters will think it is really
@@ -316,7 +316,7 @@ any questions.
 
 package HTML::TableLayout;
 
-$HTML::TableLayout::VERSION = 1.001005;
+$HTML::TableLayout::VERSION = 1.001006;
 
 use HTML::TableLayout::Symbols;
 
@@ -343,6 +343,7 @@ use Exporter;
 			pre
 			comment
 			hrule
+			container
 	   );
 @EXPORT_OK=qw(
 			form

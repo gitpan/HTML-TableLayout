@@ -1,3 +1,23 @@
+R1_1_6-19980514:
+
+## +++. Leakage: make new method to replace print() that does cleanup
+##    too. -- USE THIS: render() 
+## 0. fix >< in commments (i think this was done in 1.001005)
+## x. make default constructor, move processing into tl_init()... in
+##    widgets, you shouldn't deal with redefining new() as a
+##    consequence, only tl_init().
+##    8. i have a feeling someone is going to tell me that my
+##    constructors suck and need to be rewritten (doh! I spoke too
+##    soon; someone already has!)
+## x. improve componentcontainer class to be a mroe usefule generic
+##    container...also export symbol "container" to take advantage of
+##    it.
+## 6. add clone() to the (full) API (based on Data::Dumper)
+## x. remove internal compatibility _isa--this breaks compatibility
+##    with older perls... sorry.  speeds up everyone else.
+## x. change exception handling to use die/warn.
+
+
 R1_1_5-19980416:  
 
 ## 1. fixed another sawanampersand problem pointed out by AK.

@@ -10,7 +10,7 @@
 # Author: Stephen Farrell
 # Created: August 1997
 # Locations: http://people.healthquiz.com/sfarrell/TableLayout/
-# CVS $Id: Symbols.pm,v 1.14 1998/04/16 16:12:25 sfarrell Exp $
+# CVS $Id: Symbols.pm,v 1.15 1998/05/14 19:42:27 sfarrell Exp $
 # ====================================================================
 
 package HTML::TableLayout::Symbols;
@@ -33,6 +33,7 @@ use Exporter;
 	   comment
 	   script
 	   hrule
+	   container
 	   
 	   _anchor
 	   _row
@@ -81,6 +82,7 @@ sub list { return HTML::TableLayout::Component::List->new(@_) }
 sub pre { return HTML::TableLayout::Component::Preformat->new(@_) }
 sub comment { return HTML::TableLayout::Component::Comment->new(@_) }
 sub hrule { return HTML::TableLayout::Component::HorizontalRule->new(@_) }
+sub container { return HTML::TableLayout::ComponentContainer->new(@_) }
 
 # :FORM
 sub form { return HTML::TableLayout::Form->new(@_) }

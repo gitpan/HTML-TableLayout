@@ -10,57 +10,12 @@
 # Author: Stephen Farrell
 # Created: August 1997
 # Locations: http://people.healthquiz.com/sfarrell/TableLayout/
-# CVS $Id: TLCore.pm,v 1.22 1998/04/16 16:14:27 sfarrell Exp $
+# CVS $Id: TLCore.pm,v 1.25 1998/05/14 19:44:54 sfarrell Exp $
 # ====================================================================
-#
-# [someone please shoot me if I'm using some OO terminology
-# wrong... one of my plans is to hit some books before I make some of
-# the upcoming changes, esp. wrt constructors]
-#
-# A note on method names: I've tried to categorize methods as one of
-# the following:
-#
-#	1. public & obligatory--there are precious few of these.
-#	   new() (which is called implicitely anyway) and insert()
-#	   come to mind.  One might think of the base classes like
-#	   Component and ComponentContainer as being virtual (or as
-#	   being Interfaces in the Java sense)--this is the sense in
-#	   which I mean "obligatory"--these are not prefixed.
-#
-#	2. protected & obligatory--these include tl_setContext() and
-#	   pretty much anything previxed with "tl_".  These should be
-#	   called only by "widgets" and internally.
-#
-#	3. public--these are additional methods like passCGI() which
-#	   are expected to be used externally but are not part of the
-#	   Component system--not prefixed.
-#
-#	4. protected--these are part of the specific implemention of
-#	   the different objects.  CORE tablelayout classes are
-#	   supposed to know about these methods; perhaps some
-#	   components might need to use these, but they should
-#	   *by no means* be used by the user when making
-#	   layouts--these are prefixed by "_".
-#
-# Some classes are protected ("_Row", "_Anchor" e.g.)  These have
-# unprefixed method names, but that's assumed ok b/c outside world
-# shouldn't know the classes exist in the first place.
-# ====================================================================
-# A note on class heirarchy: You'll notice that there are many things
-# in this file that are derived from "Component", but do not have
-# "Component" in their name (like HTML::TableLayout::Component::Text
-# does).  Thus we have a distinction between Components and things
-# derived from components (icky, I know).  CORE classes have unusual
-# behavior and are critical to the grand scheme of things--esp. wrt
-# layout.  Some of these just happen to also benefit from deriving
-# from Component or ComponentContainer.  Regular old components have
-# no fancy behavior wrt layout.
-# ====================================================================
+
 
 ## TODO:
 ## +++. integrate with CGI.pm... i think this will make some ppl happy =)
-## +++. address memory leakage 
-## 0. fix >< in commments
 ## 1. When add something like a hidden form component into a table,
 ##    make sure it doesn't add an (extraneous) new cell for it.
 ## 2. Way to tell passcgi to NOT pass a certain key; similarly way to
@@ -70,81 +25,56 @@
 ##    away, and so on.
 ## 5. obj2tag should also take a tag in case some people make objects
 ##    that are expensive to create
-## 6. add clone() to the (full) API
 ## 7. make it so that Anchor and align collide in tl_getParameters()
 ##    so that you can't have both inadvertantly.
-## 8. i have a feeling someone is going to tell me that my
-##    constructors suck and need to be rewritten (doh! I spoke too
-##    soon; someone already has!)
 ## 10. BUG! If you insert a form into a containing table, you need to
 ##     do so before you insert another table into it, otherwise the
 ##     inner table doesn't know about the form. (maybe not a bug??,
 ##     but a design flaw?)
+## 11. cleaning up of circular references is only about 90% now--need
+##     to get *all* of them (project for a rainy day =)
 ## 
-##
-## Done (since last release):
-## 1. fixed another sawanampersand problem pointed out by AK.
-## 2. slipped the forms inside the table (and cell) so they don't
-##    cause an extra space in the containing table (if any).
-## 3. added support for breaks after list elements
-## 4. fixed problem with >< in FormComponentMulti items, plus can now
-##    embed real components (not just text) in FormComponentMulti.
-## 9. Make a generic container for grouping things together (no
-##    formatting)... call it "box" or somesuch.2/8/1998 11:43pm
-##    (modified componentcontainer to have a tl_print)
-## 11. added "getName()" to Form class... this will get the
-##     appropriate "name"... if there is no name, or you set the
-##     "force_numeric" flag, then it returns a number for the name.
-##     This number, of course, happens to correspond to the number of
-##     the component in the javascript document model.  this is
-##     important for supporting IE3, which doesn't support symbolic
-##     naming of such.
-## +. moved form back *outside* of the cell, otherwise it incurs a
-##    mess of extra padding. (but should be *inside* table... gotta
-##    love it)
-## +. added setParams()
-## +. added HTML::TableLayout::VERSION variable.
-## +. tinkered with padding of text (tl_do_not_pad()) 4/14/1998 
-## +. added delete() method to base class.  NOT YET IMPLEMENTED. 4/14/1998 
-##
+## DONE since last release
+## 
+## +++. Leakage: make new method to replace print() that does cleanup
+##    too. -- USE THIS: render() 
+## 0. fix >< in commments (i think this was done in 1.001005)
+## x. make default constructor, move processing into tl_init()... in
+##    widgets, you shouldn't deal with redefining new() as a
+##    consequence, only tl_init().
+##    8. i have a feeling someone is going to tell me that my
+##    constructors suck and need to be rewritten (doh! I spoke too
+##    soon; someone already has!)
+## x. improve componentcontainer class to be a mroe usefule generic
+##    container...also export symbol "container" to take advantage of
+##    it.
+## 6. add clone() to the (full) API (based on Data::Dumper)
+## x. remove internal compatibility _isa--this breaks compatibility
+##    with older perls... sorry.  speeds up everyone else.
+## x. change exception handling to use die/warn.
+
+
+
 package HTML::TableLayout::TLCore;
 package HTML::TableLayout::TL_BASE;
 
 use HTML::TableLayout::Symbols;
+use Carp;
 use strict;
 
 ##
-## This _isa is here to support perls from before isa() was added to
-## UNIVERSAL.pm.  It turns out that isa() is *much* faster than my
-## _isa()--presumably the eval() is very slow.  I'd like to do away
-## with this _isa() function, but would like to retain backwards
-## compatibility.  Would be a job for a preprocessor in C--any way to
-## achieve this in perl?
+## 1998/04/20 1:14pm default constructor--move specific processing
+## into tl_init()
 ##
-## NOTE 97/12/07 15:32:43 sfarrell --I'm aware of the preprocessor
-## mode for perl and am considering adding functionality to the
-## makefile to replace _isa() with isa() for perls that support
-## it--comments??
-sub _isa {
-  my ($this, $classname) = @_;
-  
-  ##
-  ## This is currently how I handle the native isa() in new perls...
-  ##
-  if ($] > 5.003) {
-    return $this->isa($classname);
-  }
-  
-  my $pkg = ref $this || $this;
-  return $pkg if $classname eq undef;
-  return 1 if $classname eq $pkg;
-  my $pkg_syms = eval "\\%$pkg\::";
-  return undef unless exists $pkg_syms->{ISA} and defined @{$pkg_syms->{ISA}};
-  foreach (@{ $pkg_syms->{ISA} }) {
-    $_->_isa($classname) and return 1;
-  }
-  return undef;
+sub new {
+  my $this = {};
+  bless $this, shift;
+  $this->tl_init(@_);
+  return $this;
 }
+
+sub tl_init { confess "cannot resurrect the dead" if shift->{WAS_DESTROYED} }
+
 
 ##
 ## tl_getParameters(): this is used internally to generate the
@@ -160,7 +90,7 @@ sub _isa {
 sub tl_getParameters {
   my ($this) = @_;
   
-  &$OOPSER("NO WINDOW") unless $this->{TL_WINDOW};
+  confess "No WINDOW" unless $this->{TL_WINDOW};
   
   my %gp = $this->{TL_WINDOW}->{PARAMETERS}->get($this);
   if ($this->{TL_PARAMS}) {
@@ -203,13 +133,50 @@ sub setParams {
   my ($this, %params) = @_;
   foreach ( keys %params ) {
     $this->{TL_PARAMS}->{$_} = $params{$_};
- } 
+  } 
+  return $this;
 }
 
 ##
 ## need to add explicit memory management here
 ##
-sub delete { }
+sub tl_destroy {
+  my ($this) = @_;
+  undef $this->{TL_PARAMS};
+  undef $this->{TL_PARAMS_ISA};
+  $this->{WAS_DESTROYED} = 1;
+  ## warn "DESTROY $this\n";
+}
+
+##
+## whip up a copy of an object--note this is a first attempt... 
+##
+sub clone {
+  my ($this) = @_;
+  ##
+  ## do this??
+  ##
+  delete $this->{TL_WINDOW};
+  delete $this->{TL_CONTAINER};
+  delete $this->{TL_FORM};
+
+  use Data::Dumper;
+  my $d = Data::Dumper->new([$this],[qw(enolc)]);
+  $d->Purity(1);
+  $d->Deepcopy(1);
+  my $enolc;
+  eval $d->Dump();
+  return $enolc;
+}
+
+##
+## accessors -- these only work in tl_setup(), not tl_init()!
+##
+sub getForm { return shift->{TL_FORM} }
+sub getContainer { return shift->{TL_CONTAINER} }
+sub getWindow { return shift->{TL_WINDOW} }
+
+## sub DESTROY { warn "DESTROYING " . shift . "\n" }
 
 ## --------------------------------------------------------------------
 ##
@@ -219,15 +186,12 @@ package HTML::TableLayout::Parameters;
 use HTML::TableLayout::Symbols;
 @HTML::TableLayout::Parameters::ISA=qw(HTML::TableLayout::TL_BASE);
 
-
-sub new {
-  my ($class) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{DATA} = {};
-  return $self;
+sub tl_init {
+  my $this = shift;
+  $this->{DATA} = shift;
+  $this->SUPER::tl_init(@_);
 }
-
+  
 
 ##
 ## FAST & destructive
@@ -298,33 +262,30 @@ package HTML::TableLayout::_Anchor;
 use HTML::TableLayout::Symbols;
 @HTML::TableLayout::_Anchor::ISA=qw(HTML::TableLayout::TL_BASE);
 
-
-sub new {
-  my ($class, $anchor) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{anchor} = $anchor;
-  return $self;
+sub tl_init {
+  my $this = shift;
+  $this->{anchor} = shift;
+  $this->SUPER::tl_init(@_);
 }
 
 sub value {
   my ($this) = @_;
  SWITCH: {
     my $case = $this->{anchor} || return ();
-    ($case eq "top") and	return (valign=>"top");
-    ($case eq "right") and	return (align=>"right");
-    ($case eq "bottom") and	return (valign=>"bottom");
-    ($case eq "left") and	return (align=>"left");
-    ($case eq "center") and	return (align=>"center",valign=>"middle");
-    ($case eq "ne") and		return (align=>"right",valign=>"top");
-    ($case eq "se") and		return (align=>"right",valign=>"bottom");
-    ($case eq "sw") and		return (align=>"left",valign=>"bottom");
-    ($case eq "nw") and		return (align=>"left",valign=>"top");
-    ($case =~ /^n/) and		return (align=>"center",valign=>"top");
-    ($case =~ /^e/) and		return (align=>"right",valign=>"center");
-    ($case =~ /^s/) and		return (align=>"center",valign=>"bottom");
-    ($case =~ /^w/) and		return (align=>"left",valign=>"center");
-    &$OOPSER("unknown anchor \"$case\"");
+    ($case eq "top")	 and	return (valign=>"top");
+    ($case eq "right")	 and	return (align=>"right");
+    ($case eq "bottom")	 and	return (valign=>"bottom");
+    ($case eq "left")	 and	return (align=>"left");
+    ($case eq "center")	 and	return (align=>"center"	,valign=>"middle");
+    ($case eq "ne")	 and	return (align=>"right"	,valign=>"top");
+    ($case eq "se")	 and	return (align=>"right"	,valign=>"bottom");
+    ($case eq "sw")	 and	return (align=>"left"	,valign=>"bottom");
+    ($case eq "nw")	 and	return (align=>"left"	,valign=>"top");
+    ($case =~ /^n/)	 and	return (align=>"center"	,valign=>"top");
+    ($case =~ /^e/)	 and	return (align=>"right"	,valign=>"center");
+    ($case =~ /^s/)	 and	return (align=>"center"	,valign=>"bottom");
+    ($case =~ /^w/)	 and	return (align=>"left"	,valign=>"center");
+    die("unknown anchor \"$case\"");
   }
 }
 
@@ -336,31 +297,47 @@ use HTML::TableLayout::Symbols;
 @HTML::TableLayout::Window::ISA=qw(HTML::TableLayout::ComponentContainer);
 
 
-sub new {
-  my ($class, $def_params, $title, %params) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{title} = $title;
-  $self->{TL_PARAMS} = \%params;
-  defined $params{cacheable} and $self->{CACHEABLE} = 1;
+
+sub tl_init {
+  my $this	  = shift;
+  my $def_params  = shift;
+  my $title	  = shift;
+  my %params      = @_;
+  $this->SUPER::tl_init(@_);
+
+  ## FIXME -- what does this do?
+  defined $params{Cacheable} and $this->{CACHEABLE} = 1;
+  delete $params{Cacheable};
+
   if ($def_params) {
-    $self->{PARAMETERS} = $def_params;
+    $this->{PARAMETERS} = $def_params;
   }
   else {
     ##
     ## you can pass in null parameters and everything will behave
     ## properly, but just defaults
     ##
-    $self->{PARAMETERS} = HTML::TableLayout::Parameters->new();
+    $this->{PARAMETERS} = HTML::TableLayout::Parameters->new();
   }
-  $self->{headers} = [];
-  $self->{tables} = [];
-  $self->{scripts} = [];
-  $self->{TL_WINDOW} = $self;
-  $self->{TL_CONTAINER} = $self;
-  $self->{INDENT} = 0;
-  $self->{CACHEABLE} = 0;
-  return $self;
+  $this->{title}	 = $title;
+
+  $this->{headers}	 = [];
+  $this->{tables}	 = [];
+  $this->{scripts}	 = [];
+  $this->{TL_WINDOW}	 = $this; # these get cleaned up by SUPER::tl_destroy
+  $this->{TL_CONTAINER}	 = $this;
+  $this->{INDENT}	 = 0;
+  $this->{CACHEABLE}	 = 0;
+}
+
+sub tl_destroy {
+  my $this = shift;
+  $this->{PARAMETERS}->tl_destroy();
+  undef $this->{PARAMETERS};
+  foreach (@{ $this->{headers} }) { $_->tl_destroy() }
+  foreach (@{ $this->{tables} }) { $_->tl_destroy() }
+  foreach (@{ $this->{scripts} }) { $_->tl_destroy() }
+  $this->SUPER::tl_destroy();
 }
 
 sub insert {
@@ -370,30 +347,35 @@ sub insert {
   ## Sanity checking on input (this is a bit broken, of course--is
   ## there an equivalent for "ref" that checks for object's classes?
   ##
-  ref $component or &$OOPSER("$component must be an object");
-  $component->_isa("HTML::TableLayout::Component") or
-    &$OOPSER("$component must be a component");
+  ref $component or die("$component must be an object");
+  $component->isa("HTML::TableLayout::Component") or
+    die("$component must be a component");
   
   
   ##
   ## Pseudo (runtime) overloading...
   ##
-  if ($component->_isa("HTML::TableLayout::Script")) {
+  if ($component->isa("HTML::TableLayout::Script")) {
     push @{ $this->{scripts} }, $component;
   }
-  elsif ($component->_isa("HTML::TableLayout::WindowHeader")) {
+  elsif ($component->isa("HTML::TableLayout::WindowHeader")) {
     push @{ $this->{headers} }, $component;
   }
-  elsif ($component->_isa("HTML::TableLayout::Table")) {
+  elsif ($component->isa("HTML::TableLayout::Table")) {
     push @{ $this->{tables} }, $component;
   }
   else {
-    &$OOPSER("cannot insert a $component into a window");
+    die("cannot insert a $component into a window");
   }
   
   $this->SUPER::insert($component);
 }
 
+sub render { 
+  my $this = shift;
+  $this->print();
+  $this->tl_destroy();
+}
 
 sub print {
   my ($this) = @_;
@@ -510,19 +492,28 @@ sub _getNumForms { return shift->{NUM_FORMS} }
 
 package HTML::TableLayout::Table;
 use HTML::TableLayout::Symbols;
+use Carp;
 @HTML::TableLayout::Table::ISA=qw(HTML::TableLayout::ComponentContainer);
 
-
-sub new {
-  my ($class, %params) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{TL_PARAMS} = \%params;
-  $self->{TL_COMPONENTS} = [];
-  $self->{rowindex} = 0;
-  $self->{form_is_mine} = 0;
-  return $self;
+sub tl_init {
+  my $this = shift;
+  $this->SUPER::tl_init(@_);
+  $this->{rowindex} = 0;
+  $this->{form_is_mine} = 0;
 }
+
+sub tl_destroy {
+  my $this = shift;
+  undef $this->{rowindex};
+  undef $this->{form_is_mine};
+  foreach (0.. $#{ $this->{rows} }) {
+    $this->{rows}->[$_]->tl_destroy();
+    undef $this->{rows}->[$_];
+  }
+  undef $this->{rows};
+  $this->SUPER::tl_destroy();
+}
+  
 
 sub insert {
   my ($this, $c, $br) = @_;
@@ -557,9 +548,9 @@ sub tl_setup {
     ##
     ## Handle pseudo-overloading...
     ##
-    if ($c->_isa("HTML::TableLayout::Form")) {
+    if ($c->isa("HTML::TableLayout::Form")) {
       if ($this->{TL_FORM}) {
-	&$OOPSER("already got a form");
+	die("already got a form");
       }
       $c->tl_setContext($this);
       $this->{form_is_mine} = 1;
@@ -578,7 +569,7 @@ sub tl_setup {
     
     
     my $cell;
-    if ($c->_isa("HTML::TableLayout::Cell")) {
+    if ($c->isa("HTML::TableLayout::Cell")) {
       
       ##
       ## if the cell has a header, then we slam it into an embedded
@@ -671,7 +662,7 @@ sub tl_setup {
 	= HTML::TableLayout::_Row->new($this,
 				       $this->{TL_WINDOW},
 				       $this->{TL_FORM});
-      $row->insert($cell) or &$OOPSER("cannot add first cell; ouch.");
+      $row->insert($cell) or confess "insert failed; colspan > columns ??";
     }
     elsif (($row = $this->{rows}->[$this->{rowindex}])->insert($cell)) {
       ##
@@ -697,10 +688,10 @@ sub tl_setup {
 	my $cs = $cell->getColspan();
 	my $cols = $this->getColumns();
 	if ($cs > $cols) {
-	  &$OOPSER("colspan [$cs] exceeds max number of columns [$cols]");
+	  confess "colspan [$cs] exceeds max number of columns [$cols]";
 	}
 	else {
-	  &$OOPSER("?? cannot pack; colspan [$cs] and cols [$cols]");
+	  confess "?? cannot pack; colspan [$cs] and cols [$cols]";
 	}
       }
     }
@@ -786,16 +777,19 @@ use HTML::TableLayout::Symbols;
 ##
 
 
-sub new {
-  my ($class, $container, $window, $form) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{TL_CONTAINER} = $container; # sanity check: a "Table"
-  $self->{TL_WINDOW} = $window;
-  $self->{TL_FORM} = $form;
-  $self->{columns} = $container->getColumns();
-  $self->{TL_COMPONENTS} = [];
-  return $self;
+sub tl_init {
+  my $this = shift;
+  $this->{TL_CONTAINER} = shift;
+  $this->{TL_WINDOW} = shift;
+  $this->{TL_FORM} = shift;
+  $this->{columns} = $this->{TL_CONTAINER}->getColumns();
+  $this->SUPER::tl_init(@_);
+}
+
+sub tl_destroy {
+  my $this = shift;
+  undef $this->{columns};
+  $this->SUPER::tl_destroy();
 }
 
 
@@ -852,7 +846,7 @@ sub tl_print {
   ## will be a flag to set for this behavior.
   ##
   
-  #if (! $this->isFull() ) { &$OOPSER("row is not full") }
+  #if (! $this->isFull() ) { die("row is not full") }
   
   my $w = $this->{TL_WINDOW};
   
@@ -870,14 +864,11 @@ use HTML::TableLayout::Symbols;
 @HTML::TableLayout::Cell::ISA=qw(HTML::TableLayout::ComponentContainer);
 
 
-sub new {
-  my ($class,  %params) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{TL_PARAMS} = \%params;
-  $self->{TL_COMPONENTS} = [];
-  $self->{TL_BREAKS} = [];
-  return $self;
+sub tl_destroy {
+  my $this = shift;
+  undef $this->{form_is_mine};
+  undef $this->{cell_header};
+  $this->SUPER::tl_destroy();
 }
 
 
@@ -897,37 +888,36 @@ sub insert {
   ##
   ## if $c is a header, need to treat specially
   ##
-  if (ref $c and $c->_isa("HTML::TableLayout::CellHeader")) {
-    if ($this->{"cell_header"}) {
-      &$OOPSER("There can only be one header per cell | $this");
+  if (ref $c) {
+    if ($c->isa("HTML::TableLayout::CellHeader")) {
+      if ($this->{"cell_header"}) {
+	die("There can only be one header per cell | $this");
+      }
+      $this->{"cell_header"} = $c;
     }
-    $this->{"cell_header"} = $c;
+    elsif ($c->isa("HTML::TableLayout::Cell")) {
+      die("Cannot insert a cell into a cell!");
+    }
+    elsif ($c->isa("HTML::TableLayout::Form")) {
+      $this->{TL_FORM} = $c;
+      ##
+      ## It is possible that this cell might be inserted somewhere that
+      ## already has a form.  If so, TL_FORM will be overwritten.  We
+      ## can check to make sure this doesn't happen (and know what
+      ## happened) by storing the correct for in "form_is_mine" and
+      ## comparing them during tl_setup().
+      ##
+      $this->{form_is_mine} = $c;	
+    }
+    else {
+      $this->SUPER::insert($c, $br);
+    }
   }
-  elsif (ref $c and $c->_isa("HTML::TableLayout::Cell")) {
-    &$OOPSER("Cannot insert a cell into a cell!");
-  }
-  elsif (ref $c and $c->_isa("HTML::TableLayout::Form")) {
-    $this->{TL_FORM} = $c;
-    ##
-    ## It is possible that this cell might be inserted somewhere that
-    ## already has a form.  If so, TL_FORM will be overwritten.  We
-    ## can check to make sure this doesn't happen (and know what
-    ## happened) by storing the correct for in "form_is_mine" and
-    ## comparing them during tl_setup().
-    ##
-    $this->{form_is_mine} = $c;	
-  }
-  ##
-  ## something else
-  ##
   else {
-    push @{ $this->{TL_COMPONENTS} }, $c;
-    push @{ $this->{TL_BREAKS} }, $br;
+    $this->SUPER::insert($c, $br);
   }
   return $this;
 }
-
-
 
 sub tl_setup {
   my ($this) = @_;
@@ -938,7 +928,7 @@ sub tl_setup {
   ##
   if ($this->{form_is_mine}) {
     if ($this->{form_is_mine} ne $this->{TL_FORM}) {
-      &$OOPSER("Nested forms detected!");
+      die("Nested forms detected!");
     }
     else {
       $this->{TL_FORM}->tl_setContext($this);
@@ -950,25 +940,17 @@ sub tl_setup {
   map {
     
     ##
-    ## If it is not a reference, then assume it is text to print
-    ##
-    if (! ref $_) {
-      $_ = HTML::TableLayout::Component::Text->new($_);
-      $_->tl_setContext($this);
-    }
-    
-    ##
     ## Maybe it is a form input, in which case it needs to be inserted
     ## into the appropriate form.
     ##
-    elsif ($_->_isa("HTML::TableLayout::FormComponent")) {
+    if ($_->isa("HTML::TableLayout::FormComponent")) {
       my $f = $this->{TL_FORM};
       if ($f) {
 	$f->insert($_);
 	$_->tl_setContext($this);
       }
       else {
-	&$OOPSER("No Form to insert this FormComponent [$_] into [$this]");
+	die("No Form to insert this FormComponent [$_] into [$this]");
       }
     }
     
@@ -1050,15 +1032,13 @@ use HTML::TableLayout::Symbols;
 ## right in the constructor
 ##
 
-sub new {
-  my ($class, $container, $window, $form) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{size} = $container->getRowspan(); # sanity check: container is a Cell
-  $self->{TL_CONTAINER} = $container;
-  $self->{TL_WINDOW} = $window;
-  $self->{TL_FORM} = $form;
-  return $self;
+sub tl_init {
+  my $this = shift;
+  $this->{TL_CONTAINER} = shift;
+  $this->{size} = $this->{TL_CONTAINER}->getRowspan(); 
+  $this->{TL_WINDOW} = shift;
+  $this->{TL_FORM} = shift;
+  $this->SUPER::tl_init(@_);
 }
 
 sub decrement { return --shift->{size} }
@@ -1083,19 +1063,18 @@ use HTML::TableLayout::Symbols;
 ##
 
 
-sub new {
-  my ($class, $h, %params) = @_;
-  my $self = {};
-  bless $self, $class;
+sub tl_init {
+  my $this = shift;
+  my $h = shift;
+  $this->SUPER::tl_init(@_);
+  
   if (ref $h) {
-    $self->{TL_COMPONENTS}->[0] = $h;
+    $this->{TL_COMPONENTS}->[0] = $h;
   }
   else {
-    $self->{TL_COMPONENTS}->[0]
+    $this->{TL_COMPONENTS}->[0]
       = HTML::TableLayout::Component::Text->new($h);
   }
-  $self->{TL_PARAMS} = \%params;
-  return $self;
 }
 
 
@@ -1135,17 +1114,12 @@ use HTML::TableLayout::Symbols;
   qw(HTML::TableLayout::ComponentContainer);
 
 
-sub new {
-  my ($class, $H, $component, %params) = @_;
-  my $self = {};
-  bless $self, $class;
-  if ($H and $H =~ /\D/) {
-    &$OOPSER("WindowHeader usage: new(<h number>,<component>,<params>)")
-  }
-  $self->{H} = $H;
-  $self->{TL_COMPONENTS}->[0] = $component;
-  $self->{TL_PARAMS} = \%params;
-  return $self;
+sub tl_init {
+  my $this = shift;
+  $this->{H} = shift;
+  my $xx = shift;
+  $this->SUPER::tl_init(@_);  
+  $this->{TL_COMPONENTS}->[0] = $xx;
 }
 
 
@@ -1182,13 +1156,10 @@ use HTML::TableLayout::Symbols;
 @HTML::TableLayout::Script::ISA=qw(HTML::TableLayout::Component);
 
 
-sub new {
-  my ($class, $script, %params) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{TL_PARAMS} = \%params;
-  $self->{"script"} = $script;
-  return $self;
+sub tl_init {
+  my $this = shift;
+  $this->{script} = shift;
+  $this->SUPER::tl_init(@_);
 }
 
 sub tl_print {

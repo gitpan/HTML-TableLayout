@@ -10,7 +10,7 @@
 # Author: Stephen Farrell
 # Created: August, 1997
 # Locations: http://people.healthquiz.com/sfarrell/TableLayout/
-# CVS $Id: Component.pm,v 1.14 1998/04/16 16:09:51 sfarrell Exp $
+# CVS $Id: Component.pm,v 1.15 1998/05/14 19:42:26 sfarrell Exp $
 # ====================================================================
 
 
@@ -20,17 +20,20 @@
 package HTML::TableLayout::Component;
 use HTML::TableLayout::Symbols;
 @HTML::TableLayout::Component::ISA=qw(HTML::TableLayout::TL_BASE);
+use Carp;
 use strict;
 
 ##
-## Default constructor
+## Default init
 ##
-sub new {
-  my ($class, %params) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{TL_PARAMS} = \ %params;
-  return $self;
+sub tl_init {
+  my $this = shift;
+  ##
+  ## QUIZ--how do i avoid this temporary variable?
+  ##
+  my %params = @_;
+  $this->{TL_PARAMS} = \ %params;
+  $this->SUPER::tl_init();
 }
 
 ##
@@ -39,7 +42,6 @@ sub new {
 ##
 sub tl_setContext {
   my ($this, $container) = @_;
-  
   my $window = $container->{TL_WINDOW};
   my $form = $container->{TL_FORM};
   
@@ -49,8 +51,8 @@ sub tl_setContext {
   ## DEBUGGING 
   ##
   
-  unless ($container) { &$OOPSER("container is null") }
-  unless ($window) { &$OOPSER("window is null [$container]") }
+  confess "container is null" unless $container;
+  confess "window is null" unless $window;
   
   ##
   ## it's ok for the form to be null, but if it is, we don't want to
@@ -104,6 +106,15 @@ sub tl_print {  }
 
 sub tl_breakAfter { return shift->{TL_BREAK_AFTER} }
 
+sub tl_destroy {
+  my ($this) = @_;
+  undef $this->{TL_BREAK_AFTER};
+  undef $this->{TL_CONTAINER};
+  undef $this->{TL_WINDOW};
+  undef $this->{TL_FORM};
+  $this->SUPER::tl_destroy();
+}
+
 # ---------------------------------------------------------------------
 
 ##
@@ -113,18 +124,11 @@ package HTML::TableLayout::ComponentContainer;
 use HTML::TableLayout::Symbols;
 @HTML::TableLayout::ComponentContainer::ISA=qw(HTML::TableLayout::Component);
 
-sub new {
-  my ($class, %params) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{TL_PARAMS} = \%params;
-  
-  ##
-  ## Add TL_COMPONENTS--this will be used in all subclasses...
-  ##
-  
-  $self->{TL_COMPONENTS} = [];
-  return $self;
+sub tl_init {
+  my $this = shift;
+  $this->SUPER::tl_init(@_);
+  $this->{TL_COMPONENTS} = [];
+  $this->{TL_BREAKS} = [];
 }
 
 ##
@@ -132,9 +136,12 @@ sub new {
 ## like tl_setup()
 ##
 sub insert { 
-  my ($this, $obj) = @_;
-  &$OOPSER("null insert") unless defined $obj;
+  my ($this, $obj, $br) = @_;
+  if (! ref $obj) {
+    $obj = HTML::TableLayout::Component::Text->new($obj);
+  }
   push @{ $this->{TL_COMPONENTS} }, $obj;
+  push @{ $this->{TL_BREAKS} }, $br;
   return $this;
 }
 
@@ -157,7 +164,7 @@ sub insertLn { return shift->insert(shift,1) }
 sub tl_setup {
   my ($this) = @_;
   $this->SUPER::tl_setup(); 
-  foreach (@{ $this->{TL_COMPONENTS} }) { &$OOPSER("null comp.") unless $_;
+  foreach (@{ $this->{TL_COMPONENTS} }) { die("null comp.") unless $_;
 					  $_->tl_setContext($this);
 					  $_->tl_setup() }
 } 
@@ -171,7 +178,20 @@ sub tl_setup {
 ##
 sub tl_print {
   my ($this) = @_;
-  foreach(@{ $this->{TL_COMPONENTS} }) { $_->tl_print() }
+  foreach (0..$#{ $this->{TL_COMPONENTS} }) {
+    $this->{TL_COMPONENTS}->[$_]->tl_print();
+    $this->{TL_BREAKS}->[$_] and $this->{TL_WINDOW}->i_print("><BR");
+  }
+}
+
+sub tl_destroy {
+  my ($this) = @_;
+  foreach(@{ $this->{TL_COMPONENTS} }) {
+    $_->tl_destroy();
+  }
+  undef $this->{TL_BREAKS};
+  undef $this->{TL_COMPONENTS};
+  $this->SUPER::tl_destroy();
 }
 
 # ---------------------------------------------------------------------
@@ -189,6 +209,7 @@ package HTML::TableLayout::ComponentTable;
 
 package HTML::TableLayout::Component::Text;
 use HTML::TableLayout::Symbols;
+use Carp;
 @HTML::TableLayout::Component::Text::ISA=qw(HTML::TableLayout::Component);
 
 my %MARKUP = (bold =>	"B",
@@ -197,32 +218,33 @@ my %MARKUP = (bold =>	"B",
 	      small =>	"SMALL");
 
 
-sub new {
-  my ($class, $text, %parameters) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{"text"} = $text;
-  $self->{TL_PARAMS} = \%parameters;
-  return $self;
+sub tl_init {
+  my $this = shift;
+  $this->{text} = shift;
+  $this->SUPER::tl_init(@_);
 }
 
 
 sub tl_getParameters {
   my ($this) = @_;
-  &$OOPSER() unless $this->{TL_WINDOW};
-  my %parameters = ($this->{TL_WINDOW}->{PARAMETERS}->get($this),
+  
+  confess("WAS DESTROYED") if $this->{WAS_DESTROYED};
+  confess("TL_PARAMS undef [$this]") unless $this->{TL_PARAMS};
+  confess("TL_WINDOW undef [$this]") unless $this->{TL_WINDOW};
+
+  my %params = ($this->{TL_WINDOW}->{PARAMETERS}->get($this),
 		    %{ $this->{TL_PARAMS} });
   foreach("italic","bold", "big", "small") {
-    if (exists $parameters{$_}) {
-      delete $parameters{$_};
+    if (exists $params{$_}) {
+      delete $params{$_};
       push @{ $this->{markup} }, $MARKUP{$_};
     }
   }
-  return (%parameters);
+  return (%params);
 }
 
 sub tl_print {
-  my ($this,%ops) = @_;
+  my ($this, %ops) = @_;
   my $w = $this->{TL_WINDOW};
   my %p = $this->tl_getParameters();
   $w->i_print();
@@ -260,13 +282,10 @@ package HTML::TableLayout::Component::Image;
 use HTML::TableLayout::Symbols;
 @HTML::TableLayout::Component::Image::ISA=qw(HTML::TableLayout::Component);
 
-sub new {
-  my ($class, $url, %parameters) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{url} = $url;
-  $self->{TL_PARAMS} = \%parameters;
-  return $self;
+sub tl_init {
+  my ($this, $url, %params) = @_;
+  $this->SUPER::tl_init(%params);
+  $this->{url} = $url;
 }
 
 sub tl_print {
@@ -283,46 +302,48 @@ use HTML::TableLayout::Symbols;
 @HTML::TableLayout::Component::Link::ISA
   =qw(HTML::TableLayout::ComponentContainer);
 
-sub new {
-  my ($class, $href, $anchor, %parameters) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{href} = $href;
-  if (ref $anchor) {
-    $self->{TL_COMPONENTS}->[0] = $anchor;
+sub tl_init {
+  my $this	   = shift;
+  $this->{href}	   = shift;
+  $this->{anchor}  = shift;
+  $this->SUPER::tl_init(@_);
+  
+  if (ref $this->{anchor}) {
+    $this->{TL_COMPONENTS}->[0] = $this->{anchor};
   }
   else {
-    $self->{TL_COMPONENTS}->[0]
-      = HTML::TableLayout::Component::Text->new($anchor);
+    $this->{TL_COMPONENTS}->[0]
+      = HTML::TableLayout::Component::Text->new($this->{anchor});
   }
-  if ($self->{TL_COMPONENTS}->[0]->_isa("HTML::TableLayout::Component::Text")) {
+  if ($this->{TL_COMPONENTS}->[0]->isa("HTML::TableLayout::Component::Text")) {
     ##
     ## see comment for tl_do_not_pad() method of Text
     ##
-    $self->{TL_COMPONENTS}->[0]->tl_do_not_pad();
+    $this->{TL_COMPONENTS}->[0]->tl_do_not_pad();
   }
-  $self->{TL_PARAMS} = \%parameters;
-  return $self;
 }
 
 sub passCGI {
   my ($this, $cgi, @pass) = @_;
-  if (! (ref $cgi eq "HASH")) { &$OOPSER("malformed passcgi") }
+  if (! (ref $cgi eq "HASH")) { die("malformed passcgi") }
   $this->{href} .= "?";
-  my @p;
-  (@pass) ? (@p = @pass) : (@p = keys %$cgi);
-  ##
-  ## FIXME do encoding!
-  ##
+  my @p = scalar(@pass) ? @pass : keys %$cgi;
+
   foreach (@p) {
-    if (/=/) {
-      $this->{href} .= $_ . "&";
-    }
-    else {
-      $this->{href} .= $_ . "=" . $cgi->{$_} . "&";
-    }
+    my ($k, $v) = split(/=/);
+    $v = (defined $v) ? $v : $cgi->{$k};
+    $this->{href} .= $k . "=" . escape_url($v) . "&";
   }
   return $this;
+}
+
+##
+## stolen from cgi.pm
+##
+sub escape_url {
+    my $s = shift || return undef;
+    $s=~s/([^a-zA-Z0-9_.-])/uc sprintf("%%%02x",ord($1))/eg;
+    return $s
 }
 
 
@@ -343,12 +364,10 @@ use HTML::TableLayout::Symbols;
 @HTML::TableLayout::Component::Preformat::ISA=
   qw(HTML::TableLayout::Component);
 
-sub new {
-  my ($class, $pre) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{"pre"} = $pre;
-  return $self;
+sub tl_init {
+  my $this = shift;
+  $this->{pre} = shift;
+  $this->SUPER::tl_init(@_);
 }
 
 sub tl_print {
@@ -365,12 +384,10 @@ use HTML::TableLayout::Symbols;
 @HTML::TableLayout::Component::Comment::ISA=
   qw(HTML::TableLayout::Component);
 
-sub new {
-  my ($class, $comment) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{"comment"} = $comment;
-  return $self;
+sub tl_init {
+  my $this = shift;
+  $this->{comment} = shift;
+  $this->SUPER::tl_init(@_);
 }
 
 sub tl_print {
@@ -400,15 +417,11 @@ use HTML::TableLayout::Symbols;
 @HTML::TableLayout::Component::List::ISA=
   qw(HTML::TableLayout::ComponentContainer);
 
-sub new {
-  my ($class, $numbered, $delimited) = @_;
-  my $self = {};
-  bless $self, $class;
-  $self->{numbered} = $numbered;
-  $self->{delimited} = $delimited;
-  $self->{TL_COMPONENTS} = [];
-  $self->{TL_BREAKS} = [];
-  return $self;
+sub tl_init {
+  my $this = shift;
+  $this->{numbered} = shift;
+  $this->{delimited} = shift;
+  $this->SUPER::tl_init(@_);
 }
 
 sub insert {
@@ -441,7 +454,7 @@ sub tl_print {
     my $c = $this->{TL_COMPONENTS}->[$i];
 
     if ($this->{delimited} and
-	! $c->_isa("HTML::TableLayout::Component::List")) {
+	! $c->isa("HTML::TableLayout::Component::List")) {
       $w->f_print("><LI");
     }
 
