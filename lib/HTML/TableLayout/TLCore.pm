@@ -9,8 +9,8 @@
 # File: TLCore.pm
 # Author: Stephen Farrell
 # Created: August 1997
-# Locations: http://people.healthquiz.com/sfarrell/TableLayout/
-# CVS $Id: TLCore.pm,v 1.25 1998/05/14 19:44:54 sfarrell Exp $
+# Locations: http://www.palefire.org/~sfarrell/TableLayout/
+# CVS $Id: TLCore.pm,v 1.27 1998/09/20 21:08:27 sfarrell Exp $
 # ====================================================================
 
 
@@ -33,25 +33,17 @@
 ##     but a design flaw?)
 ## 11. cleaning up of circular references is only about 90% now--need
 ##     to get *all* of them (project for a rainy day =)
-## 
-## DONE since last release
-## 
-## +++. Leakage: make new method to replace print() that does cleanup
-##    too. -- USE THIS: render() 
-## 0. fix >< in commments (i think this was done in 1.001005)
-## x. make default constructor, move processing into tl_init()... in
-##    widgets, you shouldn't deal with redefining new() as a
-##    consequence, only tl_init().
-##    8. i have a feeling someone is going to tell me that my
-##    constructors suck and need to be rewritten (doh! I spoke too
-##    soon; someone already has!)
-## x. improve componentcontainer class to be a mroe usefule generic
-##    container...also export symbol "container" to take advantage of
-##    it.
-## 6. add clone() to the (full) API (based on Data::Dumper)
-## x. remove internal compatibility _isa--this breaks compatibility
-##    with older perls... sorry.  speeds up everyone else.
-## x. change exception handling to use die/warn.
+## 12. should be able to insert default preferences for children at
+##     any widget level. implement default parameters on top of
+##     getAllChildren().  keep api backwards compatible, but allow
+##     setting of def params for any component container.
+##
+## DONE
+## o fixed textarea
+## o any componentcontainer can contain a form.
+## o multi form components can take flag 'Default', which will do the
+##   same as useData() on the form
+##
 
 
 
@@ -102,6 +94,20 @@ sub tl_getParameters {
   }
 }
 
+##
+## getParameter( param_name ): get a particular parameter from a
+## component.  if there is a window, then it'll call
+## tl_getParameters() to get defaults, otherwise it returns just
+## whatever is in the TL_PARAMS hash
+##
+sub getParameter {
+  my $this = shift;
+  my $param = shift;
+
+  my %p =
+    ($this->{TL_WINDOW}) ? $this->tl_getParameters() : %{ $this->{TL_PARAMS} };
+  return (exists $p{$param}) ? $p{$param} : undef;
+}
 
 ##
 ## tl_getLocalParameters(): This gets you a reference, so you can
@@ -124,7 +130,7 @@ sub tl_inheritParamsFrom {
 }
 
 ##
-## setParams() takes a hash and sets the params array
+## setParams() takes a hash and sets the params hash
 ## accordingly... this is used when you want to change such AFTER the
 ## constructor is called (the normal place for doing so).
 ##
@@ -389,6 +395,8 @@ sub print {
   $this->tl_setup();
   
   
+  print "Content-type: text/html\n\n";
+
   $this->i_print("<HTML");
   $this->_indentIncrement();
   $this->i_print("><HEAD><TITLE>$this->{title}</TITLE></HEAD");
@@ -446,10 +454,10 @@ sub i_print {
   ## print the indent spaces so it looks pretty
   ##
   if ($cacheable) {
-    $this->{TEXT_CACHE} .= "  " x $indent;
+     $this->{TEXT_CACHE} .= "  " x $indent;
   }
   else {
-    print "  " x $indent;
+     print "  " x $indent;
   }
   
   ##
@@ -484,7 +492,7 @@ sub _indentIncrement { shift->{INDENT}++ }
 sub _indentDecrement { shift->{INDENT}-- }
 sub _getIndent { return shift->{INDENT} }
 sub _incrementNumForms { shift->{NUM_FORMS}++ }
-sub _getNumForms { return shift->{NUM_FORMS} }
+sub _getNumForms { return shift->{NUM_FORMS} || 0 }
 
 
 
@@ -499,13 +507,11 @@ sub tl_init {
   my $this = shift;
   $this->SUPER::tl_init(@_);
   $this->{rowindex} = 0;
-  $this->{form_is_mine} = 0;
 }
 
 sub tl_destroy {
   my $this = shift;
   undef $this->{rowindex};
-  undef $this->{form_is_mine};
   foreach (0.. $#{ $this->{rows} }) {
     $this->{rows}->[$_]->tl_destroy();
     undef $this->{rows}->[$_];
@@ -529,10 +535,7 @@ sub insert {
 sub tl_setup {
   my ($this) = @_;
   
-  ## =================================================================
-  ## o Given a TL_COMPONENTS (a list of components), weed out special
-  ##   cases (like Form), and handle header processing on cells
-  ## =================================================================
+  $this->tl_setup_form();
   
   my $first_row = 1;
   my $i;
@@ -544,29 +547,6 @@ sub tl_setup {
     ## change in what one of the components actually is.
     ##
     my $c = $this->{TL_COMPONENTS}->[$i];
-    
-    ##
-    ## Handle pseudo-overloading...
-    ##
-    if ($c->isa("HTML::TableLayout::Form")) {
-      if ($this->{TL_FORM}) {
-	die("already got a form");
-      }
-      $c->tl_setContext($this);
-      $this->{form_is_mine} = 1;
-      $this->{TL_FORM} = $c;
-      $this->{TL_WINDOW}->_incrementNumForms();
-      
-      next;			# do NOT insert into _Row
-      
-      ##
-      ## If I wanted to make it so one could add the "form" whenever
-      ## one wantd, then right here it would have to go back to the
-      ## components already processed and tell them about this form.
-      ## (i think!)
-      ##
-    }
-    
     
     my $cell;
     if ($c->isa("HTML::TableLayout::Cell")) {
@@ -697,6 +677,7 @@ sub tl_setup {
     }
     $cell->tl_setup();
   }
+
 }
 
 sub tl_print {
@@ -866,7 +847,6 @@ use HTML::TableLayout::Symbols;
 
 sub tl_destroy {
   my $this = shift;
-  undef $this->{form_is_mine};
   undef $this->{cell_header};
   $this->SUPER::tl_destroy();
 }
@@ -898,17 +878,6 @@ sub insert {
     elsif ($c->isa("HTML::TableLayout::Cell")) {
       die("Cannot insert a cell into a cell!");
     }
-    elsif ($c->isa("HTML::TableLayout::Form")) {
-      $this->{TL_FORM} = $c;
-      ##
-      ## It is possible that this cell might be inserted somewhere that
-      ## already has a form.  If so, TL_FORM will be overwritten.  We
-      ## can check to make sure this doesn't happen (and know what
-      ## happened) by storing the correct for in "form_is_mine" and
-      ## comparing them during tl_setup().
-      ##
-      $this->{form_is_mine} = $c;	
-    }
     else {
       $this->SUPER::insert($c, $br);
     }
@@ -917,55 +886,6 @@ sub insert {
     $this->SUPER::insert($c, $br);
   }
   return $this;
-}
-
-sub tl_setup {
-  my ($this) = @_;
-  
-  
-  ##
-  ## If we have a form, this is the time to set its context
-  ##
-  if ($this->{form_is_mine}) {
-    if ($this->{form_is_mine} ne $this->{TL_FORM}) {
-      die("Nested forms detected!");
-    }
-    else {
-      $this->{TL_FORM}->tl_setContext($this);
-      $this->{TL_WINDOW}->_incrementNumForms();
-    }
-  }
-  
-  
-  map {
-    
-    ##
-    ## Maybe it is a form input, in which case it needs to be inserted
-    ## into the appropriate form.
-    ##
-    if ($_->isa("HTML::TableLayout::FormComponent")) {
-      my $f = $this->{TL_FORM};
-      if ($f) {
-	$f->insert($_);
-	$_->tl_setContext($this);
-      }
-      else {
-	die("No Form to insert this FormComponent [$_] into [$this]");
-      }
-    }
-    
-    ##
-    ## for anything else, we do nothing special.
-    ##
-    else {
-      $_->tl_setContext($this);
-    }
-    $_->tl_setup();
-    
-  }
-  @{ $this->{TL_COMPONENTS} };
-  
-  
 }
 
 

@@ -9,8 +9,8 @@
 # File: Form.pm
 # Author: Stephen Farrell
 # Created: August 1997
-# Locations: http://people.healthquiz.com/sfarrell/TableLayout/
-# CVS $Id: Form.pm,v 1.17 1998/05/14 19:42:26 sfarrell Exp $
+# Locations: http://www.palefire.org/~sfarrell/TableLayout/
+# CVS $Id: Form.pm,v 1.21 1998/09/20 21:06:01 sfarrell Exp $
 # ====================================================================
 
 ## ===================================================================
@@ -334,7 +334,8 @@ sub tl_setDefaultValue {
   die("No form (BUG!) [$this]") unless $this->{TL_FORM};
   my $data_hash = $this->{TL_FORM}->_getDefaultData();
   return unless exists $data_hash->{$this->{TL_PARAMS}->{name}};
-  if (exists $data_hash->{$this->{TL_PARAMS}->{name}}) {
+  if (exists $data_hash->{$this->{TL_PARAMS}->{name}} and
+      $data_hash->{$this->{TL_PARAMS}->{name}}) {
     $this->{TL_PARAMS}->{checked} = undef;
   }
 }
@@ -350,15 +351,15 @@ sub tl_init {
   my $this = shift;
   my $value = shift;
   $this->SUPER::tl_init(@_);
-  $this->{TL_PARAMS}->{value} = $value;
+  $this->{text} = $value;
 }
 
 sub tl_print {
   my ($this) = @_;
   my $w =  $this->{TL_WINDOW};
-  $w->i_print("><TEXTAREA".params(%{ $this->{TL_PARAMS} })."");
-  $w->f_print($this->{TL_PARAMS}->{value});
-  $w->i_print("></TEXTAREA");
+  $w->i_print("><TEXTAREA".params(%{ $this->{TL_PARAMS} }).">");
+  $w->f_print($this->{text});
+  $w->i_print("</TEXTAREA");
 }
 
 
@@ -431,13 +432,24 @@ sub tl_setup {
   }
   $this->{TL_OPS} = \ @new_tl_ops;
 
-  ##
-  ## Because of the order of the multiple inheretence, it doesn't find
-  ## the super that does the tl_setDefaults() call on tl_setup(), so
-  ## need to do so here.
-  ##
   $this->SUPER::tl_setup();
-  $this->tl_setDefaultValue();
+
+  ##
+  ## if "Default" was passed in as a parameter, then we use that as the
+  ## default, otherwise we fall back on the form's default values.
+  ##
+  if (exists $this->{TL_PARAMS}->{Default}) {
+    $this->{TL_DEFAULT_VALUE} = $this->{TL_PARAMS}->{Default};
+    delete $this->{TL_PARAMS}->{Default};
+  }
+  else {
+    ##
+    ## Because of the order of the multiple inheretence, it doesn't find
+    ## the super that does the tl_setDefaults() call on tl_setup(), so
+    ## need to do so here.
+    ##
+    $this->tl_setDefaultValue();
+  }
 }
 
 sub tl_setDefaultValue {

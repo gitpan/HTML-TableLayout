@@ -9,13 +9,13 @@
 # File: Component.pm
 # Author: Stephen Farrell
 # Created: August, 1997
-# Locations: http://people.healthquiz.com/sfarrell/TableLayout/
-# CVS $Id: Component.pm,v 1.15 1998/05/14 19:42:26 sfarrell Exp $
+# Locations: http://www.palefire.org/~sfarrell/TableLayout/
+# CVS $Id: Component.pm,v 1.17 1998/09/20 21:05:28 sfarrell Exp $
 # ====================================================================
 
 
 ##
-## This class is very virtual
+## This class is abstract
 ##
 package HTML::TableLayout::Component;
 use HTML::TableLayout::Symbols;
@@ -117,9 +117,6 @@ sub tl_destroy {
 
 # ---------------------------------------------------------------------
 
-##
-## This class is very virtual as well
-##
 package HTML::TableLayout::ComponentContainer;
 use HTML::TableLayout::Symbols;
 @HTML::TableLayout::ComponentContainer::ISA=qw(HTML::TableLayout::Component);
@@ -137,11 +134,19 @@ sub tl_init {
 ##
 sub insert { 
   my ($this, $obj, $br) = @_;
+
   if (! ref $obj) {
     $obj = HTML::TableLayout::Component::Text->new($obj);
   }
-  push @{ $this->{TL_COMPONENTS} }, $obj;
-  push @{ $this->{TL_BREAKS} }, $br;
+
+  if ($obj->isa("HTML::TableLayout::Form")) {
+    $this->{TL_FORM} = $obj;
+    $this->{form_is_mine} = $obj;
+  }
+  else {
+    push @{ $this->{TL_COMPONENTS} }, $obj;
+    push @{ $this->{TL_BREAKS} }, $br;
+  }
   return $this;
 }
 
@@ -163,25 +168,64 @@ sub insertLn { return shift->insert(shift,1) }
 ##
 sub tl_setup {
   my ($this) = @_;
+
+  $this->tl_setup_form();
+
+  foreach my $cmp (@{ $this->{TL_COMPONENTS} }) {
+    die("null comp.") unless $cmp;
+    ##
+    ## Maybe it is a form input, in which case it needs to be inserted
+    ## into the appropriate form.
+    ##
+    if ($cmp->isa("HTML::TableLayout::FormComponent")) {
+      my $f = $this->{TL_FORM};
+      if ($f) {
+	$f->insert($cmp);
+	$cmp->tl_setContext($this);
+      }
+      else {
+	die("No Form to insert this FormComponent [$cmp] into [$this]");
+      }
+    }
+    $cmp->tl_setContext($this);
+    $cmp->tl_setup();
+  }
   $this->SUPER::tl_setup(); 
-  foreach (@{ $this->{TL_COMPONENTS} }) { die("null comp.") unless $_;
-					  $_->tl_setContext($this);
-					  $_->tl_setup() }
 } 
 
+sub tl_setup_form {
+  my $this = shift;
+  
+  ##
+  ## If we have a form, this is the time to set its context
+  ##
+  if ($this->{form_is_mine}) {
+    if ($this->{form_is_mine} ne $this->{TL_FORM}) {
+      die("Nested forms detected!");
+    }
+    else {
+      $this->{TL_FORM}->tl_setContext($this);
+      $this->{TL_WINDOW}->_incrementNumForms();
+    }
+  }
+}
 
 
 ##
 ## this makes a ComponentContainer an implementable object--and a very
 ## useful one at that.  YOu can just stick stuff in it and it'll print
-## the various things with no added overhead.
+## the various things with no added overhead.  unfortunately,
+## subclasses will need to reproduce any behavior here...
 ##
 sub tl_print {
   my ($this) = @_;
+
+  $this->{form_is_mine} and $this->{TL_FORM}->tl_print();
   foreach (0..$#{ $this->{TL_COMPONENTS} }) {
     $this->{TL_COMPONENTS}->[$_]->tl_print();
     $this->{TL_BREAKS}->[$_] and $this->{TL_WINDOW}->i_print("><BR");
   }
+  $this->{form_is_mine} and $this->{TL_FORM}->_print_end();
 }
 
 sub tl_destroy {
@@ -193,6 +237,22 @@ sub tl_destroy {
   undef $this->{TL_COMPONENTS};
   $this->SUPER::tl_destroy();
 }
+
+sub getAllChildren {
+  my ($this, $what) = @_;
+
+  my @children;
+  if (scalar(@{ $this->{TL_COMPONENTS} })) {
+    foreach my $child (@{ $this->{TL_COMPONENTS} }) {
+      push @children, $child if (! $what or $child->isa($what));
+      push @children, $child->getAllChildren($what)
+	if $child->isa("HTML::TableLayout::ComponentContainer");
+    }
+  }
+  return @children;
+}
+    
+  
 
 # ---------------------------------------------------------------------
 ## clearly this is not what I meant... FIXME!
@@ -244,7 +304,7 @@ sub tl_getParameters {
 }
 
 sub tl_print {
-  my ($this, %ops) = @_;
+  my ($this) = @_;
   my $w = $this->{TL_WINDOW};
   my %p = $this->tl_getParameters();
   $w->i_print();
@@ -329,9 +389,15 @@ sub passCGI {
   $this->{href} .= "?";
   my @p = scalar(@pass) ? @pass : keys %$cgi;
 
+  my ($k, $v);
   foreach (@p) {
-    my ($k, $v) = split(/=/);
-    $v = (defined $v) ? $v : $cgi->{$k};
+    if (/^([^=]+)=(.*)$/) {
+      ($k, $v) = ($1, $2);
+    }
+    else {
+      ($k, $v) = ($_, $cgi->{$_});
+    }
+
     $this->{href} .= $k . "=" . escape_url($v) . "&";
   }
   return $this;
@@ -341,7 +407,7 @@ sub passCGI {
 ## stolen from cgi.pm
 ##
 sub escape_url {
-    my $s = shift || return undef;
+    my $s = shift; $s eq undef and return undef;
     $s=~s/([^a-zA-Z0-9_.-])/uc sprintf("%%%02x",ord($1))/eg;
     return $s
 }
@@ -373,9 +439,9 @@ sub tl_init {
 sub tl_print {
   my ($this) = @_;
   my $w = $this->{TL_WINDOW};
-  $w->i_print("><PRE");
+  $w->i_print("><PRE>");
   $w->f_print($this->{"pre"}."");
-  $w->i_print("></PRE");
+  $w->i_print("</PRE");
 }
 # ---------------------------------------------------------------------
 
@@ -411,7 +477,27 @@ sub tl_print {
 } 
 
 # ---------------------------------------------------------------------
+package HTML::TableLayout::Component::Font;
+use HTML::TableLayout::Symbols;
+@HTML::TableLayout::Component::Font::ISA=
+  qw(HTML::TableLayout::ComponentContainer);
 
+
+sub tl_print {
+  my $this = shift;
+
+  my %p = $this->tl_getParameters();
+  $this->{TL_WINDOW}->i_print("><FONT".params(%p)."");
+  foreach (@{ $this->{TL_COMPONENTS} }) {
+    $this->{TL_WINDOW}->_indentIncrement();
+    $_->tl_print();
+    $this->{TL_WINDOW}->_indentDecrement();
+  }
+  $this->{TL_WINDOW}->i_print("></FONT>");
+}
+    
+
+# ---------------------------------------------------------------------
 package HTML::TableLayout::Component::List;
 use HTML::TableLayout::Symbols;
 @HTML::TableLayout::Component::List::ISA=

@@ -9,8 +9,8 @@
 # File: Symbols.pm
 # Author: Stephen Farrell
 # Created: August 1997
-# Locations: http://people.healthquiz.com/sfarrell/TableLayout/
-# CVS $Id: Symbols.pm,v 1.15 1998/05/14 19:42:27 sfarrell Exp $
+# Locations: http://www.palefire.org/~sfarrell/TableLayout/
+# CVS $Id: Symbols.pm,v 1.16 1998/09/20 21:07:40 sfarrell Exp $
 # ====================================================================
 
 package HTML::TableLayout::Symbols;
@@ -34,6 +34,7 @@ use Exporter;
 	   script
 	   hrule
 	   container
+	   font
 	   
 	   _anchor
 	   _row
@@ -67,6 +68,7 @@ use Exporter;
 ## magic constructors
 ##
 
+
 # :DEFAULT
 sub parameters { return HTML::TableLayout::Parameters->new(@_) }
 sub window { return HTML::TableLayout::Window->new(@_) }
@@ -83,6 +85,7 @@ sub pre { return HTML::TableLayout::Component::Preformat->new(@_) }
 sub comment { return HTML::TableLayout::Component::Comment->new(@_) }
 sub hrule { return HTML::TableLayout::Component::HorizontalRule->new(@_) }
 sub container { return HTML::TableLayout::ComponentContainer->new(@_) }
+sub font { return HTML::TableLayout::Component::Font->new(@_) }
 
 # :FORM
 sub form { return HTML::TableLayout::Form->new(@_) }

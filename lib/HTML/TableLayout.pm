@@ -9,8 +9,8 @@
 # File: TableLayout.pm
 # Author: Stephen Farrell
 # Created: August, 1997
-# Locations: http://people.healthquiz.com/sfarrell/TableLayout/
-# CVS $Id: TableLayout.pm,v 1.14 1998/05/14 19:42:27 sfarrell Exp $
+# Locations: http://www.palefire.org/~sfarrell/TableLayout/
+# CVS $Id: TableLayout.pm,v 1.16 1998/09/20 21:28:26 sfarrell Exp $
 # ====================================================================
 ##
 ## Thanks for help and comments from: Jeff Stampes, Andreas Koenig, ...
@@ -316,7 +316,7 @@ any questions.
 
 package HTML::TableLayout;
 
-$HTML::TableLayout::VERSION = 1.001006;
+$HTML::TableLayout::VERSION = 1.001008;
 
 use HTML::TableLayout::Symbols;
 
@@ -344,6 +344,7 @@ use Exporter;
 			comment
 			hrule
 			container
+			font
 	   );
 @EXPORT_OK=qw(
 			form
