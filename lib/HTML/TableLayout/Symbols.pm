@@ -1,5 +1,5 @@
 # ====================================================================
-# Copyright (C) 1997 Stephen Farrell <stephen@farrell.org>
+# Copyright (C) 1997,1998 Stephen Farrell <stephen@farrell.org>
 #
 # All rights reserved.  This program is free software; you can
 # redistribute it and/or modify it under the same terms as Perl
@@ -10,7 +10,7 @@
 # Author: Stephen Farrell
 # Created: August 1997
 # Locations: http://people.healthquiz.com/sfarrell/TableLayout/
-# CVS $Id: Symbols.pm,v 1.12 1997/12/12 20:24:55 sfarrell Exp $
+# CVS $Id: Symbols.pm,v 1.14 1998/04/16 16:12:25 sfarrell Exp $
 # ====================================================================
 
 package HTML::TableLayout::Symbols;
@@ -166,7 +166,7 @@ sub full_trace {
 	if ($require) {
 	  $sub = "require $eval";
 	} else {
-	  $eval =~ s/[\\\']/\\$&/g;
+	  $eval =~ s/([\\\'])/\\$1/g;
 	  if ($MaxEvalLen && length($eval) > $MaxEvalLen) {
 	    substr($eval,$MaxEvalLen) = '...';
 	  }

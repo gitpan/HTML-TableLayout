@@ -1,3 +1,30 @@
+R1_1_5-19980416:  
+
+## 1. fixed another sawanampersand problem pointed out by AK.
+## 2. slipped the forms inside the table (and cell) so they don't
+##    cause an extra space in the containing table (if any).
+## 3. added support for breaks after list elements
+## 4. fixed problem with >< in FormComponentMulti items, plus can now
+##    embed real components (not just text) in FormComponentMulti.
+## 9. Make a generic container for grouping things together (no
+##    formatting)... call it "box" or somesuch.2/8/1998 11:43pm
+##    (modified componentcontainer to have a tl_print)
+## 11. added "getName()" to Form class... this will get the
+##     appropriate "name"... if there is no name, or you set the
+##     "force_numeric" flag, then it returns a number for the name.
+##     This number, of course, happens to correspond to the number of
+##     the component in the javascript document model.  this is
+##     important for supporting IE3, which doesn't support symbolic
+##     naming of such.
+## +. moved form back *outside* of the cell, otherwise it incurs a
+##    mess of extra padding. (but should be *inside* table... gotta
+##    love it)
+## +. added setParams()
+## +. added HTML::TableLayout::VERSION variable.
+## +. tinkered with padding of text (tl_do_not_pad()) 4/14/1998 
+## +. added delete() method to base class.  NOT YET IMPLEMENTED. 4/14/1998 
+
+
 R1_1_4-121297: Patches from andreas koenig to reduce number of
 warnings w/-w flag; applied a.k.'s recommendation to make the tags
 always meet as such: "><" to avoid abberations in how some browsers

@@ -1,5 +1,5 @@
 # ====================================================================
-# Copyright (C) 1997 Stephen Farrell <stephen@farrell.org>
+# Copyright (C) 1997,1998 Stephen Farrell <stephen@farrell.org>
 #
 # All rights reserved.  This program is free software; you can
 # redistribute it and/or modify it under the same terms as Perl
@@ -10,7 +10,7 @@
 # Author: Stephen Farrell
 # Created: August 1997
 # Locations: http://people.healthquiz.com/sfarrell/TableLayout/
-# CVS $Id: Form.pm,v 1.15 1997/12/12 20:24:53 sfarrell Exp $
+# CVS $Id: Form.pm,v 1.16 1998/04/16 16:12:03 sfarrell Exp $
 # ====================================================================
 
 ## ===================================================================
@@ -58,17 +58,27 @@ sub getAction { return shift->{TL_PARAMS}->{action} }
 
 sub passCGI {
   my ($this, $hashref, @pass) = @_;
+
   
   ##
   ## We want a *copy* of this hashref because we don't want it
-  ## changing under our feet
+  ## changing under our feet, and we want to be able to muck with it.
   ##
-  
-  if ($hashref) {
+
+  if (ref $hashref) {
     my %copy = %$hashref;
     $this->{passcgi} = \ %copy;
   }
-  scalar(@pass) and $this->{passlist} = \@pass;
+
+  if (ref $pass[0] eq "ARRAY" and
+      scalar(@{ $pass[0] }) > 0) {
+    my @copy = @{ $pass[0] };
+    $this->{passlist} = \ @copy;
+  }
+  elsif (scalar(@pass) > 0) {
+    $this->{passlist} = \ @pass;
+  }
+
   return $this;
 }
 
@@ -119,8 +129,26 @@ sub insert {
     
     delete $this->{passcgi}->{$c->tl_getName()};
   }
-  push @{ $this->{TL_COMPONENTS} }, $c;
+
+  $this->SUPER::insert($c);
 }
+
+
+##
+## this function can only be called during the tl_setup() phase
+##
+sub getName {
+  my ($this, $force_numeric) = @_;
+  if ($force_numeric or
+      $this->{TL_PARAMS}->{name} eq undef) {
+    return $this->{TL_WINDOW}->_getNumForms() - 1;
+  }
+  else {
+    return $this->{TL_PARAMS}->{name};
+  }
+}
+
+
 
 
 sub tl_print {
@@ -383,7 +411,7 @@ sub tl_print {
 package HTML::TableLayout::FormComponentMulti;
 use HTML::TableLayout::Symbols;
 @HTML::TableLayout::FormComponentMulti::ISA =
-  qw(HTML::TableLayout::FormComponent);
+  qw(HTML::TableLayout::ComponentContainer HTML::TableLayout::FormComponent);
 
 
 sub new {
@@ -393,6 +421,27 @@ sub new {
   $self->{TL_PARAMS} = \%params;
   $self->{TL_OPS} = $ops;
   return $self;
+}
+
+sub tl_setup {
+  my ($this) = @_;
+  my ($x, $o, @new_tl_ops);
+
+  foreach $o (@{ $this->{TL_OPS} }) {
+    $x = (ref $o->[1]) ? $o->[1] : 
+      HTML::TableLayout::Component::Text->new($o->[1]);
+    $this->insert($x);
+    push @new_tl_ops, [ $o->[0], $x ];
+  }
+  $this->{TL_OPS} = \ @new_tl_ops;
+
+  ##
+  ## Because of the order of the multiple inheretence, it doesn't find
+  ## the super that does the tl_setDefaults() call on tl_setup(), so
+  ## need to do so here.
+  ##
+  $this->SUPER::tl_setup();
+  $this->tl_setDefaultValue();
 }
 
 sub tl_setDefaultValue {
@@ -408,8 +457,24 @@ use HTML::TableLayout::Symbols;
 @HTML::TableLayout::FormComponent::Radio::ISA=
   qw(HTML::TableLayout::FormComponentMulti);
 
+##
+## Need to add an arbitrary flag to have it use breakafters
+## call it "Breakafter"
+##
+
+sub tl_setup {
+  my ($this) = @_;
+  if (exists $this->{TL_PARAMS}->{Breakafter}) {
+    $this->{breakafter} = 1;
+    delete $this->{TL_PARAMS}->{Breakafter};
+  }
+
+  $this->SUPER::tl_setup();
+}
+
 sub tl_print {
   my ($this) = @_;
+  my $br = $this->{breakafter};
   my $r;
   my $w = $this->{TL_WINDOW};
   foreach $r (@{ $this->{TL_OPS} }) {
@@ -419,7 +484,8 @@ sub tl_print {
     if ($r->[0] eq $this->{TL_DEFAULT_VALUE}) {
       $w->f_print(" CHECKED");
     }
-    $w->f_print(">$r->[1]");
+    $r->[1]->tl_print();
+    $br and $w->i_print("><BR");
   }
 }
 
@@ -441,7 +507,7 @@ sub tl_print {
     if ($o->[0] eq $this->{TL_DEFAULT_VALUE}) {
       $w->f_print(" SELECTED");
     }
-    $w->f_print(">$o->[1]");
+    $o->[1]->tl_print();
   }
   $w->_indentDecrement();
   $w->i_print("></SELECT");

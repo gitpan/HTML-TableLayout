@@ -1,5 +1,5 @@
 # ====================================================================
-# Copyright (C) 1997 Stephen Farrell <stephen@farrell.org>
+# Copyright (C) 1997,1998 Stephen Farrell <stephen@farrell.org>
 #
 # All rights reserved.  This program is free software; you can
 # redistribute it and/or modify it under the same terms as Perl
@@ -10,7 +10,7 @@
 # Author: Stephen Farrell
 # Created: August, 1997
 # Locations: http://people.healthquiz.com/sfarrell/TableLayout/
-# CVS $Id: TableLayout.pm,v 1.12 1997/12/12 20:22:55 sfarrell Exp $
+# CVS $Id: TableLayout.pm,v 1.13 1998/04/16 16:14:58 sfarrell Exp $
 # ====================================================================
 ##
 ## Thanks for help and comments from: Jeff Stampes, Andreas Koenig, ...
@@ -315,6 +315,8 @@ any questions.
 =cut
 
 package HTML::TableLayout;
+
+$HTML::TableLayout::VERSION = 1.001005;
 
 use HTML::TableLayout::Symbols;
 

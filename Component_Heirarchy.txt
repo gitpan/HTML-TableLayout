@@ -1,4 +1,4 @@
-$Id: Component_Heirarchy.txt,v 1.9 1997/10/26 06:53:14 sfarrell Exp $
+$Id: Component_Heirarchy.txt,v 1.10 1998/04/16 16:21:11 sfarrell Exp $
 
 This is the inheretence heirarchy for classes in the tablelayout
 manager.  Widgets can generally be derived from anything from
@@ -13,15 +13,17 @@ can avoid obvious name collisions this is a good thing, as long as we
 don't make an obfuscated external interface (which is a bad thing).
 
                         TL_BASE  [ _isa(), new()*, tl_getParameters(),
-			   |	   tl_inheritParamsFrom(), 
+                           |       delete(), setParams(),
+                           |       tl_inheritParamsFrom(), 
                            |       tl_getLocalParameters() ] 
-			   |     { "TL_PARAMS", "TL_PARAMS_ISA" }
+                           |     { "TL_PARAMS", "TL_PARAMS_ISA" }
                            |
                            |
                            |
                         Component [ tl_setContext(), tl_getContainer(),
                            |        tl_getWindow(), tl_getForm(), 
-                           |        tl_setup()*, tl_print()*  ]
+                           |        tl_setup()*, tl_print()*
+                           |        tl_breakAfter() ]
                            |      { "TL_CONTAINER", "TL_WINDOW", "TL_FORM" }
                            |
                            |

@@ -1,5 +1,5 @@
 # ====================================================================
-# Copyright (C) 1997 Stephen Farrell <stephen@farrell.org>
+# Copyright (C) 1997,1998 Stephen Farrell <stephen@farrell.org>
 #
 # All rights reserved.  This program is free software; you can
 # redistribute it and/or modify it under the same terms as Perl
@@ -10,7 +10,7 @@
 # Author: Stephen Farrell
 # Created: August, 1997
 # Locations: http://people.healthquiz.com/sfarrell/TableLayout/
-# CVS $Id: Component.pm,v 1.13 1997/12/12 20:24:52 sfarrell Exp $
+# CVS $Id: Component.pm,v 1.14 1998/04/16 16:09:51 sfarrell Exp $
 # ====================================================================
 
 
@@ -128,10 +128,15 @@ sub new {
 }
 
 ##
-## insert(): add a component.  NB: insert should always return obj
-## reference
+## insert(): add a component.  subclasses should always call this,
+## like tl_setup()
 ##
-sub insert { &$NOTER("you didn't override insert()"); return shift }
+sub insert { 
+  my ($this, $obj) = @_;
+  &$OOPSER("null insert") unless defined $obj;
+  push @{ $this->{TL_COMPONENTS} }, $obj;
+  return $this;
+}
 
 ##
 ## insertLn(): add a component w/ <BR> afterwards.  Generally I've
@@ -152,14 +157,22 @@ sub insertLn { return shift->insert(shift,1) }
 sub tl_setup {
   my ($this) = @_;
   $this->SUPER::tl_setup(); 
-  foreach (@{ $this->{TL_COMPONENTS} }) { &$OOPSER() unless $_;
+  foreach (@{ $this->{TL_COMPONENTS} }) { &$OOPSER("null comp.") unless $_;
 					  $_->tl_setContext($this);
 					  $_->tl_setup() }
 } 
 
 
 
-
+##
+## this makes a ComponentContainer an implementable object--and a very
+## useful one at that.  YOu can just stick stuff in it and it'll print
+## the various things with no added overhead.
+##
+sub tl_print {
+  my ($this) = @_;
+  foreach(@{ $this->{TL_COMPONENTS} }) { $_->tl_print() }
+}
 
 # ---------------------------------------------------------------------
 ## clearly this is not what I meant... FIXME!
@@ -219,7 +232,12 @@ sub tl_print {
   }
   
   $w->f_print("><FONT".params(%p).">");
-  $w->f_print($this->{"text"});
+  if ($this->{tl_do_not_pad}) {
+    $w->f_print($this->{"text"});
+  }
+  else {
+    $w->f_print(" " . $this->{"text"} . " "); 
+  }
   $w->f_print("</FONT");
   
   foreach $m (reverse @{ $this->{markup} }) {
@@ -227,6 +245,14 @@ sub tl_print {
   }
 }
 
+##
+## Yuck.  Padding of text is a messy issue after moving to the ><
+## style tagging... the problem is that if we don't pad, the text is
+## glued together unexpectedly.  if i do pad, then links look bad.
+## This function is here so a link can tell it's text components not
+## to pad.
+##
+sub tl_do_not_pad { shift->{tl_do_not_pad} = 1 }
 
 # ---------------------------------------------------------------------
 
@@ -269,6 +295,12 @@ sub new {
     $self->{TL_COMPONENTS}->[0]
       = HTML::TableLayout::Component::Text->new($anchor);
   }
+  if ($self->{TL_COMPONENTS}->[0]->_isa("HTML::TableLayout::Component::Text")) {
+    ##
+    ## see comment for tl_do_not_pad() method of Text
+    ##
+    $self->{TL_COMPONENTS}->[0]->tl_do_not_pad();
+  }
   $self->{TL_PARAMS} = \%parameters;
   return $self;
 }
@@ -279,7 +311,9 @@ sub passCGI {
   $this->{href} .= "?";
   my @p;
   (@pass) ? (@p = @pass) : (@p = keys %$cgi);
+  ##
   ## FIXME do encoding!
+  ##
   foreach (@p) {
     if (/=/) {
       $this->{href} .= $_ . "&";
@@ -341,8 +375,12 @@ sub new {
 
 sub tl_print {
   my ($this) = @_;
-  $this->{TL_WINDOW}->i_print("><!-- " . $this->{"comment"} . " --");
+  ##
+  ## This is a pretty ugly hack--note fake tag "<x>"
+  ##
+  $this->{TL_WINDOW}->i_print("><!-- " . $this->{"comment"} . " --><x");
 }
+
 # ---------------------------------------------------------------------
 
 package HTML::TableLayout::Component::HorizontalRule;
@@ -369,19 +407,20 @@ sub new {
   $self->{numbered} = $numbered;
   $self->{delimited} = $delimited;
   $self->{TL_COMPONENTS} = [];
+  $self->{TL_BREAKS} = [];
   return $self;
 }
 
 sub insert {
-  my ($this, $component) = @_;
+  my ($this, $component, $br) = @_;
   if (! ref $component) {
     $component = HTML::TableLayout::Component::Text->new($component);
   }
-  push @{ $this->{TL_COMPONENTS} }, $component;
-  return $this;
-}
 
-sub insertLn { return shift->insert(@_) }
+  push @{ $this->{TL_BREAKS} }, $br;
+
+  $this->SUPER::insert($component);
+}
 
 
 
@@ -397,10 +436,21 @@ sub tl_print {
     $list_denoter = "UL";
   }
   $w->i_print("><$list_denoter");
-  my $c;
-  foreach $c (@{ $this->{TL_COMPONENTS} }) {
-    $this->{delimited} and $w->f_print("><LI");
+  my $i;
+  foreach $i (0..$#{ $this->{TL_COMPONENTS} }) {
+    my $c = $this->{TL_COMPONENTS}->[$i];
+
+    if ($this->{delimited} and
+	! $c->_isa("HTML::TableLayout::Component::List")) {
+      $w->f_print("><LI");
+    }
+
+    $w->_indentIncrement();
     $c->tl_print();
+    $w->_indentDecrement();
+
+    ## do this if the component is a list??
+    $this->{TL_BREAKS}->[$i] and $w->f_print("><BR");
   }
   $w->i_print("></$list_denoter");
 }

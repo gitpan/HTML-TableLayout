@@ -1,5 +1,5 @@
 # ====================================================================
-# Copyright (C) 1997 Stephen Farrell <stephen@farrell.org>
+# Copyright (C) 1997,1998 Stephen Farrell <stephen@farrell.org>
 #
 # All rights reserved.  This program is free software; you can
 # redistribute it and/or modify it under the same terms as Perl
@@ -10,7 +10,7 @@
 # Author: Stephen Farrell
 # Created: August 1997
 # Locations: http://people.healthquiz.com/sfarrell/TableLayout/
-# CVS $Id: TLCore.pm,v 1.20 1997/12/12 20:23:45 sfarrell Exp $
+# CVS $Id: TLCore.pm,v 1.22 1998/04/16 16:14:27 sfarrell Exp $
 # ====================================================================
 #
 # [someone please shoot me if I'm using some OO terminology
@@ -58,6 +58,9 @@
 # ====================================================================
 
 ## TODO:
+## +++. integrate with CGI.pm... i think this will make some ppl happy =)
+## +++. address memory leakage 
+## 0. fix >< in commments
 ## 1. When add something like a hidden form component into a table,
 ##    make sure it doesn't add an (extraneous) new cell for it.
 ## 2. Way to tell passcgi to NOT pass a certain key; similarly way to
@@ -73,10 +76,36 @@
 ## 8. i have a feeling someone is going to tell me that my
 ##    constructors suck and need to be rewritten (doh! I spoke too
 ##    soon; someone already has!)
+## 10. BUG! If you insert a form into a containing table, you need to
+##     do so before you insert another table into it, otherwise the
+##     inner table doesn't know about the form. (maybe not a bug??,
+##     but a design flaw?)
 ## 
 ##
 ## Done (since last release):
-## Hu7uBo
+## 1. fixed another sawanampersand problem pointed out by AK.
+## 2. slipped the forms inside the table (and cell) so they don't
+##    cause an extra space in the containing table (if any).
+## 3. added support for breaks after list elements
+## 4. fixed problem with >< in FormComponentMulti items, plus can now
+##    embed real components (not just text) in FormComponentMulti.
+## 9. Make a generic container for grouping things together (no
+##    formatting)... call it "box" or somesuch.2/8/1998 11:43pm
+##    (modified componentcontainer to have a tl_print)
+## 11. added "getName()" to Form class... this will get the
+##     appropriate "name"... if there is no name, or you set the
+##     "force_numeric" flag, then it returns a number for the name.
+##     This number, of course, happens to correspond to the number of
+##     the component in the javascript document model.  this is
+##     important for supporting IE3, which doesn't support symbolic
+##     naming of such.
+## +. moved form back *outside* of the cell, otherwise it incurs a
+##    mess of extra padding. (but should be *inside* table... gotta
+##    love it)
+## +. added setParams()
+## +. added HTML::TableLayout::VERSION variable.
+## +. tinkered with padding of text (tl_do_not_pad()) 4/14/1998 
+## +. added delete() method to base class.  NOT YET IMPLEMENTED. 4/14/1998 
 ##
 package HTML::TableLayout::TLCore;
 package HTML::TableLayout::TL_BASE;
@@ -163,6 +192,24 @@ sub tl_inheritParamsFrom {
   my ($this, $obj) = @_;
   $this->{TL_PARAMS_ISA} = $obj;
 }
+
+##
+## setParams() takes a hash and sets the params array
+## accordingly... this is used when you want to change such AFTER the
+## constructor is called (the normal place for doing so).
+##
+
+sub setParams {
+  my ($this, %params) = @_;
+  foreach ( keys %params ) {
+    $this->{TL_PARAMS}->{$_} = $params{$_};
+ } 
+}
+
+##
+## need to add explicit memory management here
+##
+sub delete { }
 
 ## --------------------------------------------------------------------
 ##
@@ -264,23 +311,19 @@ sub value {
   my ($this) = @_;
  SWITCH: {
     my $case = $this->{anchor} || return ();
-    ($case eq "top") and return (valign=>"top");
-    ($case eq "right") and return (align=>"right");
-    ($case eq "bottom") and return (valign=>"bottom");
-    ($case eq "left") and return (align=>"left");
-    ($case eq "center") and return (align=>"center",valign=>"middle");
-    ($case eq "north"
-     or $case eq "n") and return (align=>"center",valign=>"top");
-    ($case eq "east"
-     or $case eq "e") and return (align=>"right",valign=>"center");
-    ($case eq "south"
-     or $case eq "s") and return (align=>"center",valign=>"bottom");
-    ($case eq "west"
-     or $case eq "w") and return (align=>"left",valign=>"center");
-    ($case eq "ne") and return (align=>"right",valign=>"top");
-    ($case eq "se") and return (align=>"right",valign=>"bottom");
-    ($case eq "sw") and return (align=>"left",valign=>"bottom");
-    ($case eq "nw") and return (align=>"left",valign=>"top");
+    ($case eq "top") and	return (valign=>"top");
+    ($case eq "right") and	return (align=>"right");
+    ($case eq "bottom") and	return (valign=>"bottom");
+    ($case eq "left") and	return (align=>"left");
+    ($case eq "center") and	return (align=>"center",valign=>"middle");
+    ($case eq "ne") and		return (align=>"right",valign=>"top");
+    ($case eq "se") and		return (align=>"right",valign=>"bottom");
+    ($case eq "sw") and		return (align=>"left",valign=>"bottom");
+    ($case eq "nw") and		return (align=>"left",valign=>"top");
+    ($case =~ /^n/) and		return (align=>"center",valign=>"top");
+    ($case =~ /^e/) and		return (align=>"right",valign=>"center");
+    ($case =~ /^s/) and		return (align=>"center",valign=>"bottom");
+    ($case =~ /^w/) and		return (align=>"left",valign=>"center");
     &$OOPSER("unknown anchor \"$case\"");
   }
 }
@@ -320,7 +363,6 @@ sub new {
   return $self;
 }
 
-
 sub insert {
   my ($this, $component) = @_;
   
@@ -349,12 +391,7 @@ sub insert {
     &$OOPSER("cannot insert a $component into a window");
   }
   
-  
-  push @{ $this->{TL_COMPONENTS} }, $component;
-  
-  
-  $component->tl_setContext($this);
-  return $this;
+  $this->SUPER::insert($component);
 }
 
 
@@ -464,6 +501,8 @@ sub f_print {
 sub _indentIncrement { shift->{INDENT}++ }
 sub _indentDecrement { shift->{INDENT}-- }
 sub _getIndent { return shift->{INDENT} }
+sub _incrementNumForms { shift->{NUM_FORMS}++ }
+sub _getNumForms { return shift->{NUM_FORMS} }
 
 
 
@@ -492,8 +531,7 @@ sub insert {
     $c = HTML::TableLayout::Cell->new();
     $c->insert($temp,$br);
   }
-  push @{ $this->{TL_COMPONENTS} }, $c;
-  return $this;
+  $this->SUPER::insert($c, $br);
 }
 
 
@@ -526,6 +564,7 @@ sub tl_setup {
       $c->tl_setContext($this);
       $this->{form_is_mine} = 1;
       $this->{TL_FORM} = $c;
+      $this->{TL_WINDOW}->_incrementNumForms();
       
       next;			# do NOT insert into _Row
       
@@ -661,7 +700,7 @@ sub tl_setup {
 	  &$OOPSER("colspan [$cs] exceeds max number of columns [$cols]");
 	}
 	else {
-	  &$OOPSER("?? cannot pack; colspan $cs and cols $cols");
+	  &$OOPSER("?? cannot pack; colspan [$cs] and cols [$cols]");
 	}
       }
     }
@@ -672,14 +711,14 @@ sub tl_setup {
 sub tl_print {
   my ($this) = @_;
   my $w = $this->{TL_WINDOW};
-  if ($this->{form_is_mine}) { $this->{TL_FORM}->tl_print() }
   my $p = params($this->tl_getParameters()) || "";
   $w->i_print("><TABLE $p");
+  if ($this->{form_is_mine}) { $this->{TL_FORM}->tl_print() }
   $w->_indentIncrement();
   foreach(@{ $this->{rows} }) { $_->tl_print() };
   $w->_indentDecrement();
-  $w->i_print("></TABLE");
   if ($this->{form_is_mine}) { $this->{TL_FORM}->_print_end() }
+  $w->i_print("></TABLE");
 }
 
 
@@ -798,10 +837,7 @@ sub insert {
     $this->setRSOffset($this->getRSOffset()+$cell->getColspan());
   }
   
-  push @{ $this->{TL_COMPONENTS} }, $cell;
-  $cell->tl_setContext($this);
-  
-  return 1;
+  $this->SUPER::insert($cell);
 }
 
 
@@ -840,6 +876,7 @@ sub new {
   bless $self, $class;
   $self->{TL_PARAMS} = \%params;
   $self->{TL_COMPONENTS} = [];
+  $self->{TL_BREAKS} = [];
   return $self;
 }
 
@@ -885,7 +922,7 @@ sub insert {
   ##
   else {
     push @{ $this->{TL_COMPONENTS} }, $c;
-    push @{ $this->{BREAKS} }, $br;
+    push @{ $this->{TL_BREAKS} }, $br;
   }
   return $this;
 }
@@ -905,6 +942,7 @@ sub tl_setup {
     }
     else {
       $this->{TL_FORM}->tl_setContext($this);
+      $this->{TL_WINDOW}->_incrementNumForms();
     }
   }
   
@@ -961,22 +999,21 @@ sub tl_print {
   ## PRINTED BY A CONTAINING OBJECT.
   ##
   
-  $this->{form_is_mine} and $this->{TL_FORM}->tl_print();
   
+  $this->{form_is_mine} and $this->{TL_FORM}->tl_print();
   $w->i_print("><TD".params($this->tl_getParameters())."");
   $w->_indentIncrement();
   
   
   foreach (0..$#{ $this->{TL_COMPONENTS} }) {
     $this->{TL_COMPONENTS}->[$_]->tl_print();
-    $this->{BREAKS}->[$_] and $w->i_print("><BR");
+    $this->{TL_BREAKS}->[$_] and $w->i_print("><BR");
   }
   
   $w->_indentDecrement();
   $w->i_print("></TD");
-  
-  
   $this->{form_is_mine} and $this->{TL_FORM}->_print_end();
+  
 }
 
 sub getWidth {
