@@ -1,0 +1,28 @@
+$Id: README,v 1.2 1997/12/12 20:24:54 sfarrell Exp $
+
+=========================================================================
+HTML::TableLayout is copyrighted 1997 Stephen Farrell <stephen@farrell.org>
+It can be redistributed or modified it under the same terms as Perl itself.
+=========================================================================
+
+(sorry, this will get better someday)
+
+for more information:
+
+	http://people.healthquiz.com/sfarrell/TableLayout/
+
+or
+	perldoc HTML::TableLayout
+
+or
+	look at the source! (still the best reference!)
+
+
+
+I'm finding myself awfully curious about whether people are using this
+on public sites.  If you are, drop me a URL as I'd like to check it
+out!
+
+steve farrell <steve@farrell.org>
+
+

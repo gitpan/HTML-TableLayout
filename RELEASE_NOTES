@@ -1,0 +1,39 @@
+R1_1_4-121297: Patches from andreas koenig to reduce number of
+warnings w/-w flag; applied a.k.'s recommendation to make the tags
+always meet as such: "><" to avoid abberations in how some browsers
+(notably netscape) format tables becauses of spaces between the table
+tags.  Plus now the HTML output looks decidely funky.
+
+R1_1_3-120897: Changed version number to be Perl compliant; Changed
+license from GPL to Perl-like (Artistic) as per suggestion by andreas
+koenig; Updated comments;Fixed some form handling bugs
+
+R1_1_2-110697: This will be the first fully public release of this
+module as I am quite happy with the API, and thus it should remain
+stable for at least a little while =).  I removed all use of
+tl_strav(), which, incidentally, was correctly named, as it was a
+travesty.  Also removed another loser: tl_setupComponents().
+
+D1_1_1-102697: Changed timing model to add "setup" phase as a distinct
+phase, numerous other changes and bugfixes, but still wants some more
+cleanup.  Added some new components, changed name of select to choice.
+
+D1_1_0-101197: This IS the first public release.  Improvements
+include (a) much more organized OOness and object heirarchy (b)
+redid "timing" so now there is "late" and "early".  Stuff happens
+late that needs to.  This is good (it means you can stick things
+in other things without thinking about timing at all). (c) added
+many more comments to code, improved numerous variable and method
+names.  (d) changed "cell header" mechanism to use embedded tables.
+cell header can be left,right,top or bottom.  (e) every component
+gets a pointer to its container, its window, and its form; it can
+now find these efficiently and reliably (no dangers of deep nesting
+confusing us).
+
+D1_0_0-092997: This snapshot is after initial profiling (&
+improvements), and after fixing the spelling of the word component.
+This should be considered the "stable" snapshot before reorganizations
+and improvements that have been brewing over the past week or so.
+
+(Just as a note, "D" prefix for a CVS tag means it's earmarked for
+development only... "R" is for releases.)
